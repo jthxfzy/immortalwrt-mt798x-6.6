@@ -11,9 +11,9 @@
 #   4. 编完在页面底部的 Artifacts 里下载
 #      immortalwrt-mediatek-filogic-jdcloud_re-cp-03-squashfs-sysupgrade.bin
 #
-# 配置与之前本地编译完全一致：192.168.6.1（fork 默认）、无 docker、
-# passwall（Xray+SingBox）、ddns、mosdns、udpxy+igmpproxy、upnp、
-# filemanager、turboACC。
+# 配置：LAN 192.168.6.1（workflow 里显式 patch）、无 docker、
+# ddns、upnp、filemanager、turboACC（defconfig 自带）。
+# passwall、mosdns、udpxy+igmpproxy 不编进固件，用户刷完自己装。
 #
 # 关键修复：编译前去掉源码树里所有"全局可写"权限位。
 # 之前本地编的固件刷机后 LuCI 报 "luci/getFeatures failed -32000"，
@@ -66,18 +66,15 @@ jobs:
         working-directory: openwrt
         run: |
           cp -f "$CONFIG_FILE" .config
-          # passwall: 用 Xray + SingBox 内核（去掉 defconfig 里的 not set 行）
-          sed -i '/CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray is not set/d' .config
-          sed -i '/CONFIG_PACKAGE_luci-app-passwall_INCLUDE_SingBox is not set/d' .config
+          # 默认 LAN IP 改成 192.168.6.1（改 config_generate 的默认 fallback）
+          sed -i 's/ipad=${ipaddr:-"192.168.1.1"}/ipad=${ipaddr:-"192.168.6.1"}/' \
+            package/base-files/files/bin/config_generate
+          grep -q '192.168.6.1' package/base-files/files/bin/config_generate \
+            && echo "LAN IP patched to 192.168.6.1"
+          # 精简版：只加 ddns / upnp / filemanager；
+          # passwall、mosdns、udpxy+igmpproxy（组播）不编进固件，用户刷完自己装
           cat >> .config <<'CFGEOF'
-          CONFIG_PACKAGE_luci-app-passwall=y
-          CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray=y
-          CONFIG_PACKAGE_luci-app-passwall_INCLUDE_SingBox=y
           CONFIG_PACKAGE_luci-app-ddns=y
-          CONFIG_PACKAGE_mosdns=y
-          CONFIG_PACKAGE_igmpproxy=y
-          CONFIG_PACKAGE_udpxy=y
-          CONFIG_PACKAGE_luci-app-udpxy=y
           CONFIG_PACKAGE_luci-app-upnp=y
           CONFIG_PACKAGE_luci-app-filemanager=y
           CFGEOF
